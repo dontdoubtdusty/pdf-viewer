@@ -23,8 +23,14 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      # On failure, repeat the error lines as annotations so they show on the run's summary page.
       - name: Build release APK
-        run: gradle :app:assembleRelease
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease 2>&1 | tee build.log || {
+            grep -E "error:|\.java:[0-9]+|What went wrong|Lint found|> " build.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          }
 
       - name: Rename APK
         run: cp app/build/outputs/apk/release/*.apk lean-pdf.apk
