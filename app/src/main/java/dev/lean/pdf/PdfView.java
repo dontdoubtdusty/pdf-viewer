@@ -156,10 +156,9 @@ public final class PdfView extends View {
                 invalidate();
                 return true;
             }
-            @Override public boolean onScaleEnd(ScaleGestureDetector d) {
+            @Override public void onScaleEnd(ScaleGestureDetector d) {
                 scaling = false;
                 invalidate(); // triggers sharper re-render at the new zoom
-                return true;
             }
         });
 
