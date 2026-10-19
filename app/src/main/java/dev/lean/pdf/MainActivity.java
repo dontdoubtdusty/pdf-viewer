@@ -47,6 +47,7 @@ public final class MainActivity extends Activity implements PdfView.Listener {
             Uri saved = state.getParcelable("uri");
             if (saved != null) u = saved;
             view.setPendingProgress(state.getFloat("pos", 0f));
+            if (state.containsKey("night")) view.setNight(state.getBoolean("night")); // kept until the app closes
         }
         if (u != null) open(u, startedAt); else pick();
     }
@@ -128,6 +129,7 @@ public final class MainActivity extends Activity implements PdfView.Listener {
         super.onSaveInstanceState(out);
         out.putParcelable("uri", uri);
         out.putFloat("pos", view.progress());
+        out.putBoolean("night", view.isNight());
     }
 
     @Override protected void onDestroy() {

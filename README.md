@@ -15,7 +15,7 @@ A PDF viewer for Android that only opens and reads PDFs.
 - Brief "3 / 20" page indicator while scrolling; tap it to jump to a page
 - Fast-scroll handle on the right edge for PDFs with 20+ pages
 - Remembers your place in each file (by file name and size), and on rotation
-- Night mode that follows the phone's dark theme
+- Dark/light button (bottom-left, shown while scrolling); starts from the phone's theme, resets when the app closes
 - Keeps the screen on while reading
 - Shows "Opened in X ms" for 2 seconds once the first page is on screen (timed from your tap)
 - Shows page 1 right away and measures the other pages' sizes in the background

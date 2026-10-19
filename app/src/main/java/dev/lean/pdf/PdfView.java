@@ -15,6 +15,7 @@ import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
@@ -113,6 +114,12 @@ public final class PdfView extends View {
     private boolean dragging;
     private float dragOffset;
 
+    // Dark/light button (bottom-left, shown with the page pill). Starts from the phone's theme.
+    private boolean night;
+    private final float buttonR;
+    private final RectF buttonRect = new RectF();
+    private final Path moon = new Path();
+
     public PdfView(Context ctx) {
         super(ctx);
         dp = getResources().getDisplayMetrics().density;
@@ -124,24 +131,20 @@ public final class PdfView extends View {
         setKeepScreenOn(true);
         positions = ctx.getSharedPreferences("positions", Context.MODE_PRIVATE); // starts loading now
 
-        // Night mode follows the phone's dark theme: white paper becomes dark gray, black text light gray.
-        boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
-                == Configuration.UI_MODE_NIGHT_YES;
-        if (night) {
-            float k = -0.765f, o = 225f;
-            bitmapPaint.setColorFilter(new ColorMatrixColorFilter(new ColorMatrix(new float[] {
-                    k, 0, 0, 0, o,
-                    0, k, 0, 0, o,
-                    0, 0, k, 0, o,
-                    0, 0, 0, 1, 0 })));
-            blankPaint.setColor(Color.rgb(30, 30, 30));
-        } else {
-            blankPaint.setColor(Color.WHITE);
-        }
+        setNight((getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES);
+        buttonR = 20 * dp;
+        // Moon icon: a circle with an offset circle cut out of it, centered on (0, 0).
+        Path cut = new Path();
+        moon.addCircle(0, 0, 8 * dp, Path.Direction.CW);
+        cut.addCircle(4 * dp, -3 * dp, 7 * dp, Path.Direction.CW);
+        moon.op(cut, Path.Op.DIFFERENCE);
         pillPaint.setColor(0xCC000000);
         textPaint.setColor(Color.WHITE);
         textPaint.setTextSize(13 * dp);
         textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setStrokeWidth(2 * dp);   // for the sun's rays
+        textPaint.setStrokeCap(Paint.Cap.ROUND);
         handlePaint.setColor(0xAA888888);
 
         thread.start();
@@ -165,6 +168,12 @@ public final class PdfView extends View {
             @Override public boolean onSingleTapUp(MotionEvent e) {
                 boolean pillShowing = e.getEventTime() < Math.max(indicatorUntil, noticeUntil);
                 float pad = 12 * dp;
+                if (pillShowing && e.getX() < buttonRect.right + pad && e.getY() > buttonRect.top - pad
+                        && e.getY() < buttonRect.bottom + pad) {
+                    setNight(!night);
+                    showIndicator(); // keep the button up so it can be tapped again
+                    return true;
+                }
                 if (pillShowing && tops != null && tops.length > 1 && listener != null
                         && e.getX() > pillRect.left - pad && e.getX() < pillRect.right + pad
                         && e.getY() > pillRect.top - pad && e.getY() < pillRect.bottom + pad) {
@@ -369,6 +378,28 @@ public final class PdfView extends View {
         if (tempFile != null) { tempFile.delete(); tempFile = null; }
     }
 
+    // ---------------------------------------------------------------- dark / light
+
+    /** Dark: white paper becomes dark gray, black text light gray (applied while drawing, no re-render). */
+    public void setNight(boolean on) {
+        night = on;
+        if (on) {
+            float k = -0.765f, o = 225f;
+            bitmapPaint.setColorFilter(new ColorMatrixColorFilter(new ColorMatrix(new float[] {
+                    k, 0, 0, 0, o,
+                    0, k, 0, 0, o,
+                    0, 0, k, 0, o,
+                    0, 0, 0, 1, 0 })));
+            blankPaint.setColor(Color.rgb(30, 30, 30));
+        } else {
+            bitmapPaint.setColorFilter(null);
+            blankPaint.setColor(Color.WHITE);
+        }
+        invalidate();
+    }
+
+    public boolean isNight() { return night; }
+
     // ---------------------------------------------------------------- position
 
     /** Scroll position as page index + fraction through that page (e.g. 12.4). */
@@ -489,6 +520,8 @@ public final class PdfView extends View {
             drawPill(c, (currentPage() + 1) + " / " + tops.length);
         }
 
+        if (now < Math.max(indicatorUntil, noticeUntil) || dragging) drawModeButton(c);
+
         if (handleVisible()) {
             float x = getWidth() - insetR - handleMargin - handleW;
             float y = handleY();
@@ -503,6 +536,28 @@ public final class PdfView extends View {
         pillRect.set(cx - tw / 2 - th, by - th * 1.4f, cx + tw / 2 + th, by + th * 0.6f);
         c.drawRoundRect(pillRect, th, th, pillPaint);
         c.drawText(s, cx, by, textPaint);
+    }
+
+    /** Round button in the bottom-left: shows a sun in dark mode (tap for light), a moon in light mode. */
+    private void drawModeButton(Canvas c) {
+        float cx = insetL + 12 * dp + buttonR;
+        float th = textPaint.getTextSize();
+        float cy = getHeight() - insetB - th * 1.9f; // same height as the page pill
+        buttonRect.set(cx - buttonR, cy - buttonR, cx + buttonR, cy + buttonR);
+        c.drawCircle(cx, cy, buttonR, pillPaint);
+        if (night) {
+            c.drawCircle(cx, cy, 5 * dp, textPaint);
+            for (int k = 0; k < 8; k++) {
+                double a = k * Math.PI / 4;
+                float cos = (float) Math.cos(a), sin = (float) Math.sin(a);
+                c.drawLine(cx + cos * 8 * dp, cy + sin * 8 * dp, cx + cos * 11 * dp, cy + sin * 11 * dp, textPaint);
+            }
+        } else {
+            c.save();
+            c.translate(cx, cy);
+            c.drawPath(moon, textPaint);
+            c.restore();
+        }
     }
 
     /** Called on the first frame that shows a rendered page after open(). */
