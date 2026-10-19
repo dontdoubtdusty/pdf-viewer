@@ -1,0 +1,40 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build release APK
+        run: gradle :app:assembleRelease
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/*.apk lean-pdf.apk
+
+      # Publish as a GitHub Release so the APK is a direct download on your phone.
+      - name: Publish "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest lean-pdf.apk \
+            --title "Lean PDF (latest build)" \
+            --notes "Built from ${GITHUB_SHA::7}. Download lean-pdf.apk on your phone and tap it to install."
